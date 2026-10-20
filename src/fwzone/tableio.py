@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
-from openpyxl.cell.cell import ERROR_CODES
+from openpyxl.cell.cell import ERROR_CODES, Cell
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
@@ -121,7 +121,7 @@ class SheetData:
     highlight: frozenset[int] = frozenset()
 
 
-def _text_cell(ws: WriteOnlyWorksheet, value: str) -> WriteOnlyCell | str:
+def _text_cell(ws: WriteOnlyWorksheet, value: str) -> Cell | str:
     """以 = 開頭、或剛好是 Excel 錯誤碼（如 #N/A）的字串，要明確標成文字，不被當成公式或錯誤值。"""
     if value.startswith("=") or value in ERROR_CODES:
         cell = WriteOnlyCell(ws, value=value)
@@ -139,7 +139,7 @@ def write_xlsx(path: Path, sheets: Sequence[SheetData]) -> None:
     for sheet in sheets:
         ws = wb.create_sheet(sheet.name)
         ws.freeze_panes = "A2"
-        header: list[WriteOnlyCell] = []
+        header: list[Cell] = []
         for col_idx, name in enumerate(sheet.columns):
             cell = WriteOnlyCell(ws, value=name)
             cell.data_type = "s"
