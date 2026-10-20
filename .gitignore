@@ -1,6 +1,9 @@
 # 測試資料夾不上傳
 tests/
 
+# 本機執行產生的輸出
+out/
+
 # Python
 __pycache__/
 *.py[cod]
