@@ -266,6 +266,8 @@ def test_group_cycle_exit_1(tmp_path, caplog):
 
 
 def _run_fixture(tmp_path, zone_name):
+    if not (FIXTURES / "fw_rule.xlsx").is_file() or not (FIXTURES / zone_name).is_file():
+        pytest.skip("tests/fixtures/ 的範例檔未提供（不隨 repo 上傳）")
     rules = shutil.copy(FIXTURES / "fw_rule.xlsx", tmp_path / "fw_rule.xlsx")
     zones = shutil.copy(FIXTURES / zone_name, tmp_path / zone_name)
     code, out = run(tmp_path, Path(rules), Path(zones))

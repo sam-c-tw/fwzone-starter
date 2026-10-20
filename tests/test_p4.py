@@ -4,6 +4,8 @@ import logging
 import shutil
 from pathlib import Path
 
+import pytest
+
 from fwzone.annotate import UNRESOLVED_COLUMNS
 from fwzone.cli import main
 from fwzone.tableio import read_table
@@ -277,6 +279,8 @@ def test_t23_summary_matches_output(tmp_path, capsys):
 
 
 def _run_fixture(tmp_path, zone_name):
+    if not (FIXTURES / "fw_rule.xlsx").is_file() or not (FIXTURES / zone_name).is_file():
+        pytest.skip("tests/fixtures/ 的範例檔未提供（不隨 repo 上傳）")
     rules = shutil.copy(FIXTURES / "fw_rule.xlsx", tmp_path / "fw_rule.xlsx")
     zones = shutil.copy(FIXTURES / zone_name, tmp_path / zone_name)
     return run(tmp_path, Path(rules), Path(zones))
