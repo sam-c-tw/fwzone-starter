@@ -7,8 +7,12 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
+from openpyxl.cell.cell import ERROR_CODES
 from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
+from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 
 from fwzone.errors import InputError
 
@@ -117,25 +121,38 @@ class SheetData:
     highlight: frozenset[int] = frozenset()
 
 
+def _text_cell(ws: WriteOnlyWorksheet, value: str) -> WriteOnlyCell | str:
+    """以 = 開頭、或剛好是 Excel 錯誤碼（如 #N/A）的字串，要明確標成文字，不被當成公式或錯誤值。"""
+    if value.startswith("=") or value in ERROR_CODES:
+        cell = WriteOnlyCell(ws, value=value)
+        cell.data_type = "s"
+        return cell
+    return value
+
+
 def write_xlsx(path: Path, sheets: Sequence[SheetData]) -> None:
-    """寫出 xlsx：值一律以字串寫入，標題列凍結並開啟自動篩選。"""
-    wb = Workbook()
-    wb.remove(wb.active)
+    """寫出 xlsx：值一律以字串寫入，標題列凍結並開啟自動篩選。
+
+    使用 openpyxl 的 write-only 模式逐列寫出，資料量大時記憶體用量較低。
+    """
+    wb = Workbook(write_only=True)
     for sheet in sheets:
         ws = wb.create_sheet(sheet.name)
-        ws.append(list(sheet.columns))
-        for col_idx in sheet.highlight:
-            cell = ws.cell(row=1, column=col_idx + 1)
-            cell.fill = _HEADER_HIGHLIGHT
-            cell.font = Font(bold=True)
-        for row in sheet.rows:
-            ws.append(list(row))
-        for row_cells in ws.iter_rows(min_row=1):
-            for cell in row_cells:
-                if isinstance(cell.value, str):
-                    cell.data_type = "s"  # 以 = 開頭的值不可被當成公式
         ws.freeze_panes = "A2"
-        ws.auto_filter.ref = ws.dimensions
+        header: list[WriteOnlyCell] = []
+        for col_idx, name in enumerate(sheet.columns):
+            cell = WriteOnlyCell(ws, value=name)
+            cell.data_type = "s"
+            if col_idx in sheet.highlight:
+                cell.fill = _HEADER_HIGHLIGHT
+                cell.font = Font(bold=True)
+            header.append(cell)
+        ws.append(header)
+        for row in sheet.rows:
+            ws.append([_text_cell(ws, value) for value in row])
+        if sheet.columns:
+            last_col = get_column_letter(len(sheet.columns))
+            ws.auto_filter.ref = f"A1:{last_col}{len(sheet.rows) + 1}"
     try:
         wb.save(path)
     except PermissionError as exc:

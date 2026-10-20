@@ -109,6 +109,22 @@ def test_location_format(tmp_path):
     assert read_table(xlsx, "segment").location(6) == "z.xlsx:segment!6"
 
 
+def test_write_xlsx_keeps_error_like_and_formula_like_text(tmp_path):
+    path = tmp_path / "out.xlsx"
+    write_xlsx(path, [SheetData("S", ["a"], [["#N/A"], [""], ["=SUM(1,2)"], ["123"]])])
+    assert [r["a"] for r in read_table(path, "S").rows] == ["#N/A", "", "=SUM(1,2)", "123"]
+    ws = openpyxl.load_workbook(path)["S"]
+    assert [ws.cell(row=i, column=1).data_type for i in (2, 4, 5)] == ["s", "s", "s"]
+
+
+def test_write_xlsx_header_only_sheet(tmp_path):
+    path = tmp_path / "out.xlsx"
+    write_xlsx(path, [SheetData("S", ["a", "b"], [])])
+    table = read_table(path, "S")
+    assert table.columns == ["a", "b"] and table.rows == []
+    assert openpyxl.load_workbook(path)["S"].auto_filter.ref == "A1:B1"
+
+
 def test_write_xlsx_round_trip(tmp_path):
     path = tmp_path / "out.xlsx"
     write_xlsx(
