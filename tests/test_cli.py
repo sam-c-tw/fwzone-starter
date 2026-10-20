@@ -276,7 +276,9 @@ def _run_fixture(tmp_path, zone_name):
 def test_t25_sample_files_rules_sheet(tmp_path):
     table = _run_fixture(tmp_path, "zone.xlsx")
     assert table.columns[-2:] == ["Source Zone", "Destination Zone"]
-    assert table.columns[:6] == ["FW_ID", "source_grp", "destination_grp", "service_grp", "status", "remark"]
+    assert table.columns[:6] == [
+        "FW_ID", "source_grp", "destination_grp", "service_grp", "status", "remark",
+    ]
     assert [(r["Source Zone"], r["Destination Zone"]) for r in table.rows] == [
         ("h-dev", "h-dev"),
         ("h-dev", "h"),

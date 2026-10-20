@@ -92,7 +92,10 @@ def test_address_with_conflict_and_unknown_has_two_rows(tmp_path):
     code, out = run(tmp_path, rules, zones)
     assert code == 0
     assert [cells(r) for r in unresolved(out).rows] == [
-        ["CONFLICT", "10.0.0.0/24", "10.0.0.64/26", "A (row 2) / B (row 3)", "", "Source", "2", "1"],
+        [
+            "CONFLICT", "10.0.0.0/24", "10.0.0.64/26", "A (row 2) / B (row 3)",
+            "", "Source", "2", "1",
+        ],
         ["UNKNOWN", "10.0.0.0/24", "10.0.0.128/25", "", "", "Source", "2", "1"],
     ]
     assert read_table(out, "Rules").rows[0]["Source Zone"] == "A, CONFLICT, UNKNOWN"
@@ -163,7 +166,9 @@ def test_log_written_next_to_output_with_tab_separated_fields(tmp_path):
     assert log.is_file()
     (line,) = [x for x in log.read_text(encoding="utf-8").splitlines() if not x.startswith("#")]
     code, location, column, value, message = line.split("\t")
-    assert (code, location, column, value) == ("HOST_BITS", "zones.csv!6", "segment", "10.217.2.0/22")
+    assert (code, location, column, value) == (
+        "HOST_BITS", "zones.csv!6", "segment", "10.217.2.0/22",
+    )
     assert "/22" in message and "10.217.0.0" in message
 
 

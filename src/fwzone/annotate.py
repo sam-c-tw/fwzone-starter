@@ -5,7 +5,7 @@
 
 import ipaddress
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from fwzone.config import Config, GroupsConfig, ParsingConfig, RulesConfig, ZonesConfig
@@ -246,57 +246,104 @@ def rule_issues(
     return issues
 
 
-def annotate_cell(
-    text: str, parsing: ParsingConfig, resolver: GroupResolver, index: ZoneIndex
-) -> CellResult:
-    """一個儲存格的 zone 標記與 Unresolved 紀錄。
+@dataclass(frozen=True)
+class _Outcome:
+    """一個 token 或一個 group 的比對結果，可安全地在多個儲存格間共用。"""
 
+    markers: frozenset[str]
+    findings: tuple[Finding, ...]
+
+
+class Annotator:
+    """逐儲存格產生 zone 標記與 Unresolved 紀錄。
+
+    同一個 token、同一個 group、同一段儲存格文字的結果都只算一次，之後直接取用。
     標記為所有 token（含 group 展開成員）的聯集，已去重並排序。
     """
-    markers: set[str] = set()
-    findings: list[Finding] = []
 
-    def add(token: ParsedToken, via: tuple[str, ...]) -> None:
+    def __init__(self, parsing: ParsingConfig, resolver: GroupResolver, index: ZoneIndex) -> None:
+        self._parsing = parsing
+        self._resolver = resolver
+        self._index = index
+        self._tokens: dict[str, _Outcome] = {}
+        self._groups: dict[str, _Outcome] = {}
+        self._cells: dict[str, CellResult] = {}
+
+    def cell(self, text: str) -> CellResult:
+        cached = self._cells.get(text)
+        if cached is not None:
+            return cached
+
+        markers: set[str] = set()
+        findings: list[Finding] = []
+        for text_token in tokenize(text, self._parsing.delimiters):
+            parsed = self._resolver.parser.parse(text_token)
+            if parsed is None:
+                continue
+            if parsed.kind is TokenKind.GROUP:
+                outcome = self._group(parsed.raw)
+            else:
+                outcome = self._token(parsed)
+            markers |= outcome.markers
+            findings.extend(outcome.findings)
+
+        result = CellResult(tuple(sort_markers(markers)), tuple(findings))
+        self._cells[text] = result
+        return result
+
+    def _group(self, name: str) -> _Outcome:
+        cached = self._groups.get(name)
+        if cached is not None:
+            return cached
+
+        markers: set[str] = set()
+        findings: list[Finding] = []
+        for member in self._resolver.expand(name):
+            outcome = self._token(member.token)
+            markers |= outcome.markers
+            findings.extend(replace(f, via=member.via) for f in outcome.findings)
+
+        result = _Outcome(frozenset(markers), tuple(findings))
+        self._groups[name] = result
+        return result
+
+    def _token(self, token: ParsedToken) -> _Outcome:
+        """非 group 的 token；Finding 的 via 一律為空，展開 group 時再填入。"""
+        cached = self._tokens.get(token.raw)
+        if cached is not None:
+            return cached
+
         if token.kind is TokenKind.INTERVAL:
             assert token.interval is not None
-            result = index.lookup(token.interval)
-            markers.update(result.markers)
+            result = self._index.lookup(token.interval)
+            findings: list[Finding] = []
             if result.conflicts:
                 ranges = tuple(c for span in result.conflicts for c in to_cidrs(span.interval))
                 rows = sorted({r for span in result.conflicts for r in span.rows})
-                conflicting = tuple((r, index.zone_for_row(r)) for r in rows)
-                findings.append(Finding(CONFLICT, token.raw, ranges, conflicting, via))
+                conflicting = tuple((r, self._index.zone_for_row(r)) for r in rows)
+                findings.append(Finding(CONFLICT, token.raw, ranges, conflicting))
             if result.uncovered:
                 ranges = tuple(c for gap in result.uncovered for c in to_cidrs(gap))
-                findings.append(Finding(UNKNOWN, token.raw, ranges, (), via))
-            return
-        marker = token.marker
-        assert marker is not None
-        markers.add(marker)
-        if token.kind is TokenKind.UNPARSED:
-            findings.append(Finding(UNPARSED, token.raw, via=via))
-
-    for text_token in tokenize(text, parsing.delimiters):
-        parsed = resolver.parser.parse(text_token)
-        if parsed is None:
-            continue
-        if parsed.kind is TokenKind.GROUP:
-            for member in resolver.expand(parsed.raw):
-                add(member.token, member.via)
+                findings.append(Finding(UNKNOWN, token.raw, ranges))
+            outcome = _Outcome(result.markers, tuple(findings))
         else:
-            add(parsed, ())
-    return CellResult(tuple(sort_markers(markers)), tuple(findings))
+            marker = token.marker
+            assert marker is not None
+            findings = [Finding(UNPARSED, token.raw)] if token.kind is TokenKind.UNPARSED else []
+            outcome = _Outcome(frozenset({marker}), tuple(findings))
+
+        self._tokens[token.raw] = outcome
+        return outcome
 
 
 def annotate_rules(
     rows: Rows, config: Config, resolver: GroupResolver, index: ZoneIndex
 ) -> list[RuleResult]:
+    annotator = Annotator(config.parsing, resolver, index)
     return [
         RuleResult(
-            annotate_cell(row.get(config.rules.source_column, ""), config.parsing, resolver, index),
-            annotate_cell(
-                row.get(config.rules.destination_column, ""), config.parsing, resolver, index
-            ),
+            annotator.cell(row.get(config.rules.source_column, "")),
+            annotator.cell(row.get(config.rules.destination_column, "")),
         )
         for row in rows
     ]
