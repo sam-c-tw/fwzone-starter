@@ -4,7 +4,7 @@
 
 在防火牆規則表右側新增 `Source Zone` 與 `Destination Zone` 兩欄，讓 zone owner 以規則為單位審查合理性。Zone 來自 zone 定義檔（網段與所屬 zone 的對照表）。
 
-> **狀態**：開發中。實作依 [SPEC.md](SPEC.md) 的 P1 → P4 階段進行，下列用法為規格設計，尚未全部可用。
+> **狀態**：P1–P4 已實作，三平台（macOS、Windows、Ubuntu）的實機驗證待人工執行。規格見 [SPEC.md](SPEC.md)。
 
 ## 功能
 
@@ -37,7 +37,31 @@ pip install -e .
 fwzone --rules fw_rule.xlsx --zones zone.xlsx --config fwzone.toml -o out.xlsx
 ```
 
-也可用 `python -m fwzone` 執行。
+也可用 `python -m fwzone` 執行。成功時會在 stdout 印出摘要（規則列數、含 UNKNOWN / UNPARSED 的規則數、Unresolved 位址數、問題 log 筆數、輸出檔與 log 路徑）；有資料問題時，stderr 會提示筆數，加 `-v` 可看每一筆。
+
+### 各平台執行範例
+
+以範例檔為例（`fw_rule.xlsx` 內含 `rule` 與 `group` 工作表）：
+
+macOS（zsh）／Ubuntu（bash）：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+fwzone --rules fw_rule.xlsx --zones zone.xlsx -o out.xlsx
+```
+
+Windows（PowerShell）：
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e .
+fwzone --rules fw_rule.xlsx --zones zone.xlsx -o out.xlsx
+```
+
+輸出檔已存在時需加 `--force` 才會覆寫（輸出 xlsx 與問題 log 都適用）。
 
 | 參數 | 必填 | 說明 |
 | --- | --- | --- |
@@ -59,7 +83,7 @@ fwzone --rules fw_rule.xlsx --zones zone.xlsx --config fwzone.toml -o out.xlsx
 
 ## 設定檔
 
-TOML 格式。未提供設定檔時全部套用下列預設值，可直接處理範例檔。
+TOML 格式。未提供設定檔時全部套用下列預設值，可直接處理範例檔。同內容的範例檔見 [fwzone.example.toml](fwzone.example.toml)。
 
 ```toml
 [rules]

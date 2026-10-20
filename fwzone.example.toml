@@ -1,0 +1,26 @@
+# fwzone 設定檔範例。所有值皆為預設值；未提供設定檔時等同使用這份內容。
+# 使用方式：fwzone --rules fw_rule.xlsx --zones zone.xlsx --config fwzone.toml
+
+[rules]
+sheet = "rule"                   # 僅 xlsx
+source_column = "source_grp"
+destination_column = "destination_grp"
+
+[groups]
+sheet = "group"
+name_column = "group_name"
+member_column = "segment"
+
+[zones]
+sheet = "segment"
+cidr_column = "segment"
+zone_column = "zone"
+
+[parsing]
+delimiters = ["\n", ",", ";"]
+any_keywords = ["any"]           # 不分大小寫
+
+[output]
+source_zone_column = "Source Zone"
+destination_zone_column = "Destination Zone"
+zone_separator = ", "

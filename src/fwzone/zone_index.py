@@ -91,9 +91,15 @@ class ZoneIndex:
 
     def __init__(self, entries: Iterable[ZoneEntry]) -> None:
         by_version: dict[int, list[ZoneEntry]] = {}
+        self._zone_by_row: dict[int, str] = {}
         for entry in entries:
             by_version.setdefault(entry.interval.version, []).append(entry)
+            self._zone_by_row[entry.row] = entry.zone
         self._tables = {v: _build_table(es) for v, es in by_version.items()}
+
+    def zone_for_row(self, row: int) -> str:
+        """zone 定義列號對應的 zone 名稱。"""
+        return self._zone_by_row[row]
 
     def conflict_spans(self) -> list[ConflictSpan]:
         """所有被兩列以上覆蓋的區間，依版本、起點排序。"""
