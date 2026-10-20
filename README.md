@@ -25,23 +25,14 @@
 
 ## 安裝
 
-```bash
-pip install -e .
-```
-
-也可使用 `uv`。
-
-## 使用
+在一台新電腦上，只需要程式碼本身，不需要 `tests/`。先安裝 Python 3.11 以上與 git。
 
 ```bash
-fwzone --rules fw_rule.xlsx --zones zone.xlsx --config fwzone.toml -o out.xlsx
+git clone https://github.com/sam-c-tw/fwzone-starter.git
+cd fwzone-starter
 ```
 
-也可用 `python -m fwzone` 執行。成功時會在 stdout 印出摘要（規則列數、含 UNKNOWN / UNPARSED 的規則數、Unresolved 位址數、問題 log 筆數、輸出檔與 log 路徑）；有資料問題時，stderr 會提示筆數，加 `-v` 可看每一筆。
-
-### 各平台執行範例
-
-以範例檔為例（`fw_rule.xlsx` 內含 `rule` 與 `group` 工作表）：
+建立虛擬環境並安裝：
 
 macOS（zsh）／Ubuntu（bash）：
 
@@ -49,7 +40,6 @@ macOS（zsh）／Ubuntu（bash）：
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-fwzone --rules fw_rule.xlsx --zones zone.xlsx -o out.xlsx
 ```
 
 Windows（PowerShell）：
@@ -58,10 +48,60 @@ Windows（PowerShell）：
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
+```
+
+安裝後即有 `fwzone` 指令（Windows 為 `fwzone.exe`），也可用 `python -m fwzone` 執行。也可使用 `uv`。
+
+> 若 `fwzone` 找不到，通常是虛擬環境沒有啟用，或沒有執行 `pip install -e .`。
+
+## 使用
+
+### 1. 準備來源檔
+
+| 檔案 | 預設要求 |
+| --- | --- |
+| 規則檔 | `.xlsx` 或 `.csv`；讀 `rule` 工作表，欄位 `source_grp`、`destination_grp` |
+| Group 定義 | 預設放在規則檔的 `group` 工作表，欄位 `group_name`、`segment`；也可用 `--groups` 另外指定檔案 |
+| Zone 定義檔 | 讀 `segment` 工作表，欄位 `segment`（CIDR）、`zone` |
+
+csv 必須是 UTF-8（含 BOM 亦可）。工作表或欄位名稱不同時，複製 [fwzone.example.toml](fwzone.example.toml) 改成自己的名稱，再以 `--config` 指定（見下方「設定檔」）。
+
+### 2. 執行
+
+```bash
+fwzone --rules 你的規則檔.xlsx --zones 你的zone檔.xlsx -o result.xlsx
+```
+
+使用設定檔與獨立的 group 檔時：
+
+```bash
+fwzone --rules fw_rule.xlsx --zones zone.xlsx --groups groups.xlsx --config fwzone.toml -o result.xlsx
+```
+
+### 3. 查看結果
+
+產生兩個檔案，位於 `-o` 指定的位置（未指定時為規則檔同目錄的 `<規則檔主檔名>_zoned.xlsx`）：
+
+- `result.xlsx`：`Rules` 工作表為原始規則加上 `Source Zone`、`Destination Zone` 兩欄；`Unresolved` 工作表列出查不到 zone、衝突或無法解析的位址。
+- `result_issues.log`：zone 定義或規則中的資料問題（例如 CIDR 含主機位元），一行一筆、欄位以 tab 分隔。
+
+終端機會印出摘要（規則列數、含 UNKNOWN / UNPARSED 的規則數、Unresolved 位址數、問題 log 筆數、輸出檔與 log 路徑）。有資料問題時，stderr 會提示筆數，加 `-v` 可看每一筆。
+
+### 4. 常見狀況
+
+- **結束碼 1**：找不到檔案、欄位或工作表，或 group 有循環參照。錯誤訊息會列出實際的欄位與工作表名稱。
+- **結束碼 2**：輸出檔（或問題 log）已存在，加 `--force` 即可覆寫；或參數、設定檔格式錯誤。
+- **寫入失敗**：輸出的 xlsx 若正被 Excel 開啟，請先關閉再執行。
+
+### 各平台執行範例
+
+以範例檔為例（`fw_rule.xlsx` 內含 `rule` 與 `group` 工作表），安裝完成並啟用虛擬環境後，三個平台的指令相同：
+
+```bash
 fwzone --rules fw_rule.xlsx --zones zone.xlsx -o out.xlsx
 ```
 
-輸出檔已存在時需加 `--force` 才會覆寫（輸出 xlsx 與問題 log 都適用）。
+### 參數
 
 | 參數 | 必填 | 說明 |
 | --- | --- | --- |
