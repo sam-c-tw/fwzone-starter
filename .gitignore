@@ -1,5 +1,5 @@
-# 測試資料夾不上傳
-tests/
+# 範例資料不上傳
+tests/fixtures/
 
 # 本機執行產生的輸出
 out/

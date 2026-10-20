@@ -25,7 +25,7 @@
 
 ## 安裝
 
-在一台新電腦上，只需要程式碼本身，不需要 `tests/`。先安裝 Python 3.11 以上與 git。
+在一台新電腦上使用，只需要程式碼本身，不需要 `tests/`。先安裝 Python 3.11 以上與 git。
 
 ```bash
 git clone https://github.com/sam-c-tw/fwzone-starter.git
@@ -65,6 +65,66 @@ pip install -e .
 | Zone 定義檔 | 讀 `segment` 工作表，欄位 `segment`（CIDR）、`zone` |
 
 csv 必須是 UTF-8（含 BOM 亦可）。工作表或欄位名稱不同時，複製 [fwzone.example.toml](fwzone.example.toml) 改成自己的名稱，再以 `--config` 指定（見下方「設定檔」）。
+
+### 來源檔格式
+
+下面三份是一組可以直接使用的最小範例。xlsx 與 csv 的欄位相同；xlsx 的第一列必須是標題列，工作表名稱要與設定一致。
+
+**Zone 定義檔**（`zone.xlsx` 的 `segment` 工作表，或 `zones.csv`）：一列一個 CIDR，多個網段可屬於同一個 zone。
+
+| segment | zone |
+| --- | --- |
+| 10.1.0.0/24 | ZONE-A |
+| 10.1.1.0/24 | ZONE-B |
+| 10.2.0.0/16 | ZONE-C |
+
+**Group 定義**（規則檔的 `group` 工作表，或用 `--groups` 指定的檔案）：一個儲存格可放多個成員，成員可以是 IP、CIDR、IP range，也可以是另一個 group（可巢狀）。同一個 group 也可以拆成多列。
+
+| group_name | segment |
+| --- | --- |
+| grp_web | `10.1.0.5`<br>`10.1.0.6` |
+| grp_app | 10.1.1.0/24 |
+| grp_all | `grp_web`<br>`grp_app` |
+
+**規則檔**（`rule` 工作表，或 `rules.csv`）：只有 source 與 destination 兩欄會被讀取，其他欄位原樣保留到輸出。
+
+| FW_ID | source_grp | destination_grp | service_grp |
+| --- | --- | --- | --- |
+| R001 | grp_web | grp_app | srv_https |
+| R002 | `grp_all`<br>`10.2.0.1` | any | srv_ssh |
+| R003 | 10.1.0.250 - 10.1.1.5 | 192.168.1.1 | srv_http |
+
+上表中的 `<br>` 代表儲存格內換行（Excel 按 Alt+Enter）。csv 則是用雙引號包住含換行的儲存格。
+
+以這組資料執行，`Rules` 工作表最右兩欄為：
+
+| FW_ID | Source Zone | Destination Zone |
+| --- | --- | --- |
+| R001 | ZONE-A | ZONE-B |
+| R002 | ZONE-A, ZONE-B, ZONE-C | ANY |
+| R003 | ZONE-A, ZONE-B | UNKNOWN |
+
+`Unresolved` 工作表會有一列：`UNKNOWN`、`192.168.1.1`，位於 Destination 側、規則列 4。
+
+**儲存格內可以寫的位址（token）**
+
+| 寫法 | 範例 | 說明 |
+| --- | --- | --- |
+| 單一 IP | `10.1.0.5` | IPv4、IPv6 皆可 |
+| CIDR | `10.1.0.0/24` | 網段起點必須正確，不可含主機位元 |
+| IP range | `10.1.0.250 - 10.1.1.5` | 兩端都要寫完整 IP，起點不可大於終點；不支援 `10.0.0.1-20` 簡寫 |
+| Group 名稱 | `grp_web` | 大小寫敏感，需在 group 定義中存在 |
+| any | `any`、`0.0.0.0/0`、`::/0` | 輸出為 `ANY`，不做 zone 比對 |
+
+多個位址以換行、逗號或分號分隔（可在設定檔的 `delimiters` 修改）。
+
+**填寫時的注意事項**
+
+- Zone 定義的 `zone` 不可為空，`segment` 必須是合法且網段起點正確的 CIDR（例如 `10.217.2.0/22` 是錯的，起點應為 `10.217.0.0`）。不合法的列不會納入比對，並記錄在問題 log。
+- Zone 定義的網段不要互相重疊；重疊的部分會被標為 `CONFLICT`（即使兩列 zone 相同也是），並記錄在問題 log。
+- FQDN、未定義的 group、含主機位元的 CIDR（如 `10.1.0.5/24`）無法解析，輸出為 `UNPARSED:<原值>`，並列在 `Unresolved` 工作表。
+- 規則中的 IPv4 與 IPv6 不會互相比對；IPv6 位址只會對應 zone 定義中的 IPv6 CIDR。
+- 儲存格一律以文字讀入，像 `00123` 這種前導零不會遺失。
 
 ### 2. 執行
 
@@ -177,4 +237,4 @@ ruff check
 
 專案結構、各階段內容與驗收測試案例見 [SPEC.md](SPEC.md)。
 
-`tests/` 已列入 `.gitignore`，不會上傳；測試用範例檔（`tests/fixtures/`）需自行在本機準備。
+`tests/fixtures/` 的範例檔（`fw_rule.xlsx`、`zone.xlsx`、`zone_hostbits.xlsx`）已列入 `.gitignore`，不會上傳；使用到這些範例檔的測試（T24、T25 等）需自行把檔案放到該資料夾才能通過。
